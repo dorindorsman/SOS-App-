@@ -59,6 +59,7 @@ class DbHelper(context: Context?) : SQLiteOpenHelper(context, DATABASE_NAME, nul
                     list.add(ContactModel(c.getInt(0), c.getString(1), c.getString(2)))
                 } while (c.moveToNext())
             }
+            db.close()
             return list
         }
 

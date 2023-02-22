@@ -1,7 +1,12 @@
 package com.example.sosapp
 
+import android.util.Log
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.sosapp.contacts.ContactModel
 import com.example.sosapp.util.RequestState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -21,11 +26,31 @@ class MainViewModel @Inject constructor(
         const val TAG = "MainViewModel"
     }
 
+
+    var showAlertDialog by mutableStateOf(false)
+        private set
+
+    var currentContact: ContactModel? = null
+
+    //var contactList: MutableList<ContactModel>? = mutableListOf()
+    var contactList = MutableStateFlow(listOf<ContactModel>())
+
+
     private val _permissionState = MutableStateFlow<RequestState<Boolean>>(RequestState.Idle)
     val permissionState: StateFlow<RequestState<Boolean>> = _permissionState
 
     init {
         readPermissionState()
+    }
+
+    fun handleEvent(event: MainEvent) {
+
+        when (event) {
+            is MainEvent.SetShowAlertDialogState -> showAlertDialog = event.state
+            is MainEvent.SetCurrentContact -> currentContact = event.contact
+            else -> {}
+        }
+
     }
 
     private fun readPermissionState() {
@@ -50,7 +75,7 @@ class MainViewModel @Inject constructor(
     }
 
 
-//
+// roman
 //    private fun getNumberOfContacts(context: Context) : Cursor? {
 //        val contentResolver: ContentResolver = context.contentResolver
 //        return contentResolver.query(
