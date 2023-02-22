@@ -1,3 +1,10 @@
 <resources>
     <string name="app_name">SOSApp</string>
+    <string name="name">Name</string>
+    <string name="phone">Phone</string>
+    <string name="add">Add Emergency Contact</string>
+    <string name="remove_title">Remove Contact</string>
+    <string name="remove_text">Are you sure want to remove this contact?</string>
+    <string name="yes">YES</string>
+    <string name="no">NO</string>
 </resources>
