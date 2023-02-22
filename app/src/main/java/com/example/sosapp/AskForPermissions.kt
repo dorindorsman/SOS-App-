@@ -2,7 +2,6 @@ package com.example.sosapp
 
 import android.content.Intent
 import android.net.Uri
-import android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.Button
 import androidx.compose.material.Text
@@ -18,24 +17,27 @@ import com.example.sosapp.util.RequestState
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.MultiplePermissionsState
 import com.google.accompanist.permissions.PermissionState
-
+import android.provider.Settings
+import com.google.accompanist.permissions.isGranted
 
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun AskForPermissions(
     mainViewModel: MainViewModel,
-    multiplePermissionsState: MultiplePermissionsState
+    multiplePermissionsState: MultiplePermissionsState,
+    locationPermissionState: PermissionState
 ) {
     val permissionsState by mainViewModel.permissionState.collectAsState()
 
-    if (permissionsState is RequestState.Success<*>) {
-        if (multiplePermissionsState.shouldShowRationale.not() && (permissionsState as RequestState.Success<Boolean>).data) {
+    if (permissionsState is RequestState.Success) {
+        if (multiplePermissionsState.shouldShowRationale.not() && (permissionsState as RequestState.Success<Boolean>).data && locationPermissionState.status.isGranted.not()) {
             AskWithSettings()
         } else {
             AskWithRequest(
                 mainViewModel = mainViewModel,
-                multiplePermissionsState = multiplePermissionsState
+                multiplePermissionsState = multiplePermissionsState,
+                locationPermissionState =  locationPermissionState
             )
         }
     }
@@ -58,7 +60,7 @@ fun AskWithSettings() {
                 ContextCompat.startActivity(
                     context,
                     Intent(
-                        ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                         Uri.fromParts("package", "com.example.sosapp", null)
                     ), null
                 )
@@ -73,7 +75,8 @@ fun AskWithSettings() {
 @Composable
 fun AskWithRequest(
     mainViewModel: MainViewModel,
-    multiplePermissionsState: MultiplePermissionsState
+    multiplePermissionsState: MultiplePermissionsState,
+    locationPermissionState: PermissionState
 ) {
     Column(
         modifier = Modifier
@@ -86,11 +89,15 @@ fun AskWithRequest(
             getTextToShowGivenPermissions(
                 mainViewModel = mainViewModel,
                 multiplePermissionsState.revokedPermissions,
-                multiplePermissionsState.shouldShowRationale
+                multiplePermissionsState.shouldShowRationale,
+                locationPermissionState = locationPermissionState
             )
         )
         Spacer(modifier = Modifier.height(8.dp))
-        Button(onClick = { multiplePermissionsState.launchMultiplePermissionRequest() }) {
+        Button(onClick = {
+            multiplePermissionsState.launchMultiplePermissionRequest()
+            locationPermissionState.launchPermissionRequest()
+        }) {
             Text("Request permissions")
         }
     }
@@ -100,7 +107,8 @@ fun AskWithRequest(
 private fun getTextToShowGivenPermissions(
     mainViewModel: MainViewModel,
     permissions: List<PermissionState>,
-    shouldShowRationale: Boolean
+    shouldShowRationale: Boolean,
+    locationPermissionState: PermissionState
 ): String {
     val revokedPermissionsSize = permissions.size
     if (revokedPermissionsSize == 0) return ""
@@ -108,6 +116,8 @@ private fun getTextToShowGivenPermissions(
     val textToShow = StringBuilder().apply {
         append("The \n")
     }
+
+    textToShow.append(locationPermissionState.permission)
 
     for (i in permissions.indices) {
         textToShow.append(permissions[i].permission)
@@ -123,6 +133,7 @@ private fun getTextToShowGivenPermissions(
             }
         }
     }
+
     textToShow.append(
         if (shouldShowRationale) {
             "\n\n(Rationale): "

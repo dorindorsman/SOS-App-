@@ -10,6 +10,7 @@ import android.database.Cursor
 import android.location.Location
 import android.location.LocationManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.ContactsContract
@@ -20,6 +21,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -48,7 +50,9 @@ import com.example.sosapp.shake_services.ReactivateService
 import com.example.sosapp.shake_services.SensorService
 import com.example.sosapp.ui.theme.SOSAppTheme
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
+import com.google.accompanist.permissions.rememberPermissionState
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -61,45 +65,27 @@ open class MainActivity : ComponentActivity() {
 
     private val mainViewModel: MainViewModel by viewModels()
 
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private val neededPermissions = listOf(
+        SEND_SMS,
+        READ_CONTACTS,
+        ACCESS_COARSE_LOCATION,
+        ACCESS_FINE_LOCATION
+    )
+
     // create instances of various classes to be used
     private var db: DbHelper = DbHelper(this)
 
+    @RequiresApi(Build.VERSION_CODES.Q)
     @OptIn(ExperimentalPermissionsApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val smsManager: SmsManager = SmsManager.getDefault()
 
+        startService()
 
-
-        // check for BatteryOptimization,
-        val pm = getSystemService(POWER_SERVICE) as PowerManager
-        if (!pm.isIgnoringBatteryOptimizations(packageName)) {
-            askIgnoreOptimization()
-        }
-
-        // start the service
-        val sensorService = SensorService()
-        val intent = Intent(this, sensorService.javaClass)
-        if (!isMyServiceRunning(sensorService.javaClass)) {
-            startService(intent)
-        }
-
-        getLocation(this)
-
-
-        mainViewModel.contactList.value = db.allContacts.toMutableList()
-        mainViewModel.contactList.value.let {contactList->
-            for (c in contactList) {
-                val message = ("""Hey, ${c.name}I am in DANGER, i need help. Please urgently reach me out. Here are my coordinates.
- http://maps.google.com/?q=$""" + ",")
-                smsManager.sendTextMessage(
-                    c.phone, null,
-                    message, null, null
-                )
-            }
-        }
-
+        setContactList(smsManager)
 
         setContent {
             SOSAppTheme {
@@ -108,25 +94,42 @@ open class MainActivity : ComponentActivity() {
 
                     val context = LocalContext.current
 
-                    val multiplePermissionsState = rememberMultiplePermissionsState(
-                        listOf(
-                            SEND_SMS,
-                            ACCESS_COARSE_LOCATION,
-                            ACCESS_FINE_LOCATION,
-                            ACCESS_BACKGROUND_LOCATION,
-                            READ_CONTACTS,
-                        )
-                    )
+                    val multiplePermissionsState = rememberMultiplePermissionsState(neededPermissions)
+                    val locationPermission = rememberPermissionState (ACCESS_BACKGROUND_LOCATION)
 
-                    if (multiplePermissionsState.allPermissionsGranted) {
+
+                    if (multiplePermissionsState.allPermissionsGranted && locationPermission.status.isGranted) {
                         MainScreen(context)
                     } else {
                         AskForPermissions(
                             mainViewModel = mainViewModel,
-                            multiplePermissionsState = multiplePermissionsState
+                            multiplePermissionsState = multiplePermissionsState,
+                            locationPermissionState = locationPermission
                         )
                     }
                 }
+            }
+        }
+    }
+
+    private fun startService() {
+        val sensorService = SensorService()
+        val intent = Intent(this.applicationContext, sensorService.javaClass)
+        if (!isMyServiceRunning(sensorService.javaClass)) {
+            startService(intent)
+        }
+    }
+
+    private fun setContactList(smsManager: SmsManager) {
+        mainViewModel.contactList.value = db.allContacts.toMutableList()
+        mainViewModel.contactList.value.let { contactList ->
+            for (c in contactList) {
+                val message = ("""Hey, ${c.name}I am in DANGER, i need help. Please urgently reach me out. Here are my coordinates.
+     http://maps.google.com/?q=$""" + ",")
+                smsManager.sendTextMessage(
+                    c.phone, null,
+                    message, null, null
+                )
             }
         }
     }
@@ -148,7 +151,6 @@ open class MainActivity : ComponentActivity() {
                 ) == PackageManager.PERMISSION_GRANTED
             ) {
                 location = lm.getLastKnownLocation(providers[i])
-                Log.d("dorin1", location.toString())
             }
             if (location != null) {
                 break
@@ -160,6 +162,10 @@ open class MainActivity : ComponentActivity() {
 
     @Composable
     fun MainScreen(context: Context) {
+
+        Log.d("dorin",getLocation(this).toString())
+
+
         Column(
             modifier = Modifier
                 .padding(10.dp)

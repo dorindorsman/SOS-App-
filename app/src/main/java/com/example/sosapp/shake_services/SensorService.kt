@@ -14,19 +14,14 @@ import android.hardware.Sensor
 import android.hardware.SensorManager
 import android.location.Location
 import android.location.LocationManager
-import android.os.Build
-import android.os.IBinder
-import android.os.VibrationEffect
-import android.os.Vibrator
+import android.os.*
 import android.telephony.SmsManager
 import android.util.Log
 import androidx.annotation.RequiresApi
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import com.example.sosapp.DbHelper
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.*
 import com.google.android.gms.tasks.*
 
 
@@ -34,6 +29,19 @@ class SensorService : Service() {
     private var mSensorManager: SensorManager? = null
     private var mAccelerometer: Sensor? = null
     private var mShakeDetector: ShakeDetector? = null
+
+    val smsManager: SmsManager = SmsManager.getDefault()
+    var fusedLocationClient: FusedLocationProviderClient? = null
+    var location : Location? = null
+    val locationCallback = object : LocationCallback() {
+        override fun onLocationResult(p0: LocationResult) {
+            for (lo in p0.locations) {
+                // Update UI with location data
+                location = lo
+            }
+        }
+    }
+
     override fun onBind(intent: Intent?): IBinder {
         // TODO: Return the communication channel to the service.
         throw UnsupportedOperationException("Not yet implemented")
@@ -54,7 +62,7 @@ class SensorService : Service() {
 
         // ShakeDetector initialization
         mSensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager?
-        mAccelerometer = mSensorManager!!.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        mAccelerometer = mSensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         mShakeDetector = ShakeDetector()
         mShakeDetector!!.setOnShakeListener(object : ShakeDetector.OnShakeListener {
             @SuppressLint("MissingPermission")
@@ -67,33 +75,35 @@ class SensorService : Service() {
                     vibrate()
 
 //                    val location = getLocation(context = context)
-//
-//                    if (location != null) {
-//                        onSuccess(location)
-//                    }else{
-//                        onFailure()
-//                    }
-
-
-                    // create FusedLocationProviderClient to get the user location
-                    val fusedLocationClient = LocationServices.getFusedLocationProviderClient(getApplicationContext())
-
-                    // use the PRIORITY_BALANCED_POWER_ACCURACY
-                    // so that the service doesn't use unnecessary power via GPS
-                    // it will only use GPS at this very moment
-                    fusedLocationClient.getCurrentLocation(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY, object : CancellationToken() {
-                        override fun onCanceledRequested(p0: OnTokenCanceledListener) = CancellationTokenSource().token
-
-                        override fun isCancellationRequested(): Boolean {
-                            return false
-                        }
-                    }).addOnSuccessListener { location ->
-                        Log.d("dorin2", location.altitude.toString() +"" + location.longitude+toString())
+                    fusedLocationClient = LocationServices.getFusedLocationProviderClient(applicationContext)
+                    startLocationUpdates()
+                    if (location != null) {
                         onSuccess(location)
+                    }else{
+                        onFailure()
                     }
-                        .addOnFailureListener {
-                            onFailure()
-                        }
+
+
+//                    // create FusedLocationProviderClient to get the user location
+//                    val fusedLocationClient = LocationServices.getFusedLocationProviderClient(getApplicationContext())
+//
+//                    // use the PRIORITY_BALANCED_POWER_ACCURACY
+//                    // so that the service doesn't use unnecessary power via GPS
+//                    // it will only use GPS at this very moment
+//                    fusedLocationClient.getCurrentLocation(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY, object : CancellationToken() {
+//                        override fun onCanceledRequested(p0: OnTokenCanceledListener) = CancellationTokenSource().token
+//
+//                        override fun isCancellationRequested(): Boolean {
+//                            return false
+//                        }
+//                    }).addOnSuccessListener { location ->
+//                        Log.d("dorin2", location.altitude.toString() +"" + location.longitude+toString())
+//                        onSuccess(location)
+//                    }
+//                        .addOnFailureListener {
+//                            onFailure()
+//                        }
+
 
 
                 }
@@ -104,13 +114,45 @@ class SensorService : Service() {
         mSensorManager!!.registerListener(mShakeDetector, mAccelerometer, SensorManager.SENSOR_DELAY_UI)
     }
 
+
+    private fun startLocationUpdates() {
+        locationCallback.let {
+            val locationRequest = LocationRequest.create().apply {
+                interval = 10000
+                fastestInterval = 5000
+                priority = LocationRequest.PRIORITY_HIGH_ACCURACY
+            }
+            if (ActivityCompat.checkSelfPermission(
+                    this,
+                    ACCESS_FINE_LOCATION
+                ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
+                    this,
+                    ACCESS_COARSE_LOCATION
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                // TODO: Consider calling
+                //    ActivityCompat#requestPermissions
+                // here to request the missing permissions, and then overriding
+                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                //                                          int[] grantResults)
+                // to handle the case where the user grants the permission. See the documentation
+                // for ActivityCompat#requestPermissions for more details.
+                return
+            }
+            fusedLocationClient?.requestLocationUpdates(
+                locationRequest,
+                it,
+                Looper.getMainLooper()
+            )
+        }
+    }
+
     private fun onFailure() {
         Log.d("Check: ", "OnFailure")
         val message = """
                             I am in DANGER, i need help. Please urgently reach me out.
                             GPS was turned off.Couldn't find location. Call your nearest Police Station.
                             """.trimIndent()
-        val smsManager: SmsManager = SmsManager.getDefault()
         val db = DbHelper(this@SensorService)
         val list = db.allContacts
         for (c in list) {
@@ -123,8 +165,6 @@ class SensorService : Service() {
         // for both the cases we will
         // create different messages
         if (location != null) {
-            // get the SMSManager
-            val smsManager: SmsManager = SmsManager.getDefault()
 
             // get the list of all the contacts in Database
             val db = DbHelper(this@SensorService)
@@ -139,7 +179,6 @@ class SensorService : Service() {
             }
         } else {
             val message = """I am in DANGER, i need help. Please urgently reach me out. GPS was turned off.Couldn't find location. Call your nearest Police Station. """.trimIndent()
-            val smsManager: SmsManager = SmsManager.getDefault()
             val db = DbHelper(this@SensorService)
             val list = db.allContacts
             for (c in list) {

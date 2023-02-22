@@ -75,18 +75,6 @@ class MainViewModel @Inject constructor(
     }
 
 
-// roman
-//    private fun getNumberOfContacts(context: Context) : Cursor? {
-//        val contentResolver: ContentResolver = context.contentResolver
-//        return contentResolver.query(
-//            ContactsContract.Contacts.CONTENT_URI,
-//            null,
-//            null,
-//            null,
-//            ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
-//        )
-//    }
-//
 //    private fun getLocation(context: Context): DoubleArray {
 //        val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
 //        val providers = lm.getProviders(true)
