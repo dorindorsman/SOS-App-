@@ -120,7 +120,6 @@ class SensorService : Service() {
     }
 
     private fun onSuccess(location: Location?) {
-
         if (location != null) {
             // get the list of all the contacts in Database
             Log.d("dorin success", location.altitude.toString() + "" + location.longitude + toString())
