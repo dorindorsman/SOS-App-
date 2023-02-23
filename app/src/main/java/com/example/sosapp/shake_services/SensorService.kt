@@ -1,43 +1,47 @@
 package com.example.sosapp.shake_services
 
-import android.Manifest.permission.ACCESS_COARSE_LOCATION
-import android.Manifest.permission.ACCESS_FINE_LOCATION
 import android.annotation.SuppressLint
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.Service
+import android.app.*
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorManager
 import android.location.Location
-import android.location.LocationManager
 import android.os.*
 import android.telephony.SmsManager
 import android.util.Log
 import androidx.annotation.RequiresApi
-import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import com.example.sosapp.DbHelper
+import com.example.sosapp.MainActivity
 import com.google.android.gms.location.*
 import com.google.android.gms.tasks.*
 
 
 class SensorService : Service() {
+
+    companion object {
+        const val START_FOREGROUND_SERVICE = "START_FOREGROUND_SERVICE"
+        const val STOP_FOREGROUND_SERVICE = "STOP_FOREGROUND_SERVICE"
+        var MAIN_ACTION = "com.example.sosapp.shake_services.sensorservice.action.main"
+    }
+    private var db: DbHelper = DbHelper(this)
     private var mSensorManager: SensorManager? = null
     private var mAccelerometer: Sensor? = null
     private var mShakeDetector: ShakeDetector? = null
 
-    val smsManager: SmsManager = SmsManager.getDefault()
-    var fusedLocationClient: FusedLocationProviderClient? = null
-    var location : Location? = null
-    val locationCallback = object : LocationCallback() {
-        override fun onLocationResult(p0: LocationResult) {
-            for (lo in p0.locations) {
-                // Update UI with location data
-                location = lo
+    private val smsManager: SmsManager = SmsManager.getDefault()
+    private lateinit var fusedLocationClient: FusedLocationProviderClient
+    var location: Location? = null
+    private val locationCallback = object : LocationCallback() {
+        override fun onLocationResult(locationResult: LocationResult) {
+            super.onLocationResult(locationResult)
+            if (locationResult.lastLocation != null) {
+                Log.d("dorin", location.toString())
+                location = locationResult.lastLocation
+                onSuccess(location)
+            } else {
+                onFailure()
             }
         }
     }
@@ -56,94 +60,49 @@ class SensorService : Service() {
         super.onCreate()
 
         // start the foreground service
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startMyOwnForeground() else startForeground(1, Notification())
-
-        val context = this.applicationContext
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startMyOwnForeground() else startForeground(101, Notification())
 
         // ShakeDetector initialization
         mSensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager?
         mAccelerometer = mSensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         mShakeDetector = ShakeDetector()
+
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(applicationContext)
+
         mShakeDetector!!.setOnShakeListener(object : ShakeDetector.OnShakeListener {
             @SuppressLint("MissingPermission")
             override fun onShake(count: Int) {
                 // check if the user has shacked
                 // the phone for 3 time in a row
                 if (count == 3) {
-
                     // vibrate the phone
                     vibrate()
-
-//                    val location = getLocation(context = context)
-                    fusedLocationClient = LocationServices.getFusedLocationProviderClient(applicationContext)
                     startLocationUpdates()
-                    if (location != null) {
-                        onSuccess(location)
-                    }else{
-                        onFailure()
-                    }
-
-
-//                    // create FusedLocationProviderClient to get the user location
-//                    val fusedLocationClient = LocationServices.getFusedLocationProviderClient(getApplicationContext())
-//
-//                    // use the PRIORITY_BALANCED_POWER_ACCURACY
-//                    // so that the service doesn't use unnecessary power via GPS
-//                    // it will only use GPS at this very moment
-//                    fusedLocationClient.getCurrentLocation(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY, object : CancellationToken() {
-//                        override fun onCanceledRequested(p0: OnTokenCanceledListener) = CancellationTokenSource().token
-//
-//                        override fun isCancellationRequested(): Boolean {
-//                            return false
-//                        }
-//                    }).addOnSuccessListener { location ->
-//                        Log.d("dorin2", location.altitude.toString() +"" + location.longitude+toString())
-//                        onSuccess(location)
-//                    }
-//                        .addOnFailureListener {
-//                            onFailure()
-//                        }
-
-
-
+                    Log.d("dorin 108", location.toString())
                 }
             }
         })
 
         // register the listener
-        mSensorManager!!.registerListener(mShakeDetector, mAccelerometer, SensorManager.SENSOR_DELAY_UI)
+        mSensorManager?.registerListener(mShakeDetector, mAccelerometer, SensorManager.SENSOR_DELAY_UI)
     }
 
 
+    @SuppressLint("MissingPermission")
     private fun startLocationUpdates() {
-        locationCallback.let {
+        Log.d("dorin", "line 143")
+        locationCallback?.let {
             val locationRequest = LocationRequest.create().apply {
                 interval = 10000
                 fastestInterval = 5000
                 priority = LocationRequest.PRIORITY_HIGH_ACCURACY
-            }
-            if (ActivityCompat.checkSelfPermission(
-                    this,
-                    ACCESS_FINE_LOCATION
-                ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
-                    this,
-                    ACCESS_COARSE_LOCATION
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                // TODO: Consider calling
-                //    ActivityCompat#requestPermissions
-                // here to request the missing permissions, and then overriding
-                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-                //                                          int[] grantResults)
-                // to handle the case where the user grants the permission. See the documentation
-                // for ActivityCompat#requestPermissions for more details.
-                return
             }
             fusedLocationClient?.requestLocationUpdates(
                 locationRequest,
                 it,
                 Looper.getMainLooper()
             )
+
         }
     }
 
@@ -161,93 +120,70 @@ class SensorService : Service() {
     }
 
     private fun onSuccess(location: Location?) {
-        // check if location is null
-        // for both the cases we will
-        // create different messages
+
         if (location != null) {
-
             // get the list of all the contacts in Database
-            val db = DbHelper(this@SensorService)
-            val list = db.allContacts
-
-            Log.d("dorin", location.altitude.toString() +"" + location.longitude+toString())
+            Log.d("dorin success", location.altitude.toString() + "" + location.longitude + toString())
             // send SMS to each contact
-            for (c in list) {
+            for (c in db.allContacts) {
                 val message =
-                    """SOS ${c.name}, I am in DANGER, i need help. Please urgently reach me out. Here are my coordinates. http://maps.google.com/?q=${location.altitude},${location.longitude}"""
+                    """SOS ${c.name}, I am in DANGER, i need help. Please urgently reach me out. Here are my coordinates. http://maps.google.com/?q=${location.latitude},${location.longitude}"""
                 smsManager.sendTextMessage(c.phone, null, message, null, null)
             }
         } else {
-            val message = """I am in DANGER, i need help. Please urgently reach me out. GPS was turned off.Couldn't find location. Call your nearest Police Station. """.trimIndent()
-            val db = DbHelper(this@SensorService)
+            val message =
+                """I am in DANGER, i need help. Please urgently reach me out. GPS was turned off.Couldn't find location. Call your nearest Police Station. """.trimIndent()
             val list = db.allContacts
             for (c in list) {
                 smsManager.sendTextMessage(c.phone, null, message, null, null)
             }
         }
+
+        fusedLocationClient.removeLocationUpdates(locationCallback )
     }
 
-    fun getLocation(context: Context): Location? {
-        val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        val providers = lm.getProviders(true)
-
-        var location: Location? = null
-        for (i in providers.indices.reversed()) {
-            if (
-                ActivityCompat.checkSelfPermission(
-                    context,
-                    ACCESS_FINE_LOCATION
-                ) == PackageManager.PERMISSION_GRANTED ||
-                ActivityCompat.checkSelfPermission(
-                    context,
-                    ACCESS_COARSE_LOCATION
-                ) == PackageManager.PERMISSION_GRANTED
-            ) {
-                location = lm.getLastKnownLocation(providers[i])
-            }
-            if (location != null) {
-                break
-            }
-        }
-        return location
-    }
-
-    // method to vibrate the phone
+    @SuppressLint("ServiceCast")
     fun vibrate() {
-        val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator?
-        val vibEff: VibrationEffect
-
+        val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
         // Android Q and above have some predefined vibrating patterns
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            vibEff = VibrationEffect.createPredefined(VibrationEffect.EFFECT_DOUBLE_CLICK)
-            vibrator!!.cancel()
-            vibrator.vibrate(vibEff)
-        } else {
-            vibrator!!.vibrate(500)
+            vibrator.cancel()
         }
+        vibrator.vibrate(500)
     }
 
-    // For Build versions higher than Android Oreo, we launch
-    // a foreground service in a different way. This is due to the newly
-    // implemented strict notification rules, which require us to identify
-    // our own notification channel in order to view them correctly.
     @RequiresApi(Build.VERSION_CODES.O)
     private fun startMyOwnForeground() {
-        val NOTIFICATION_CHANNEL_ID = "example.permanence"
+        val NOTIFICATION_CHANNEL_ID = "com.example.sosapp.shake_services.CHANNEL_ID_FOREGROUND"
         val channelName = "Background Service"
         val chan = NotificationChannel(NOTIFICATION_CHANNEL_ID, channelName, NotificationManager.IMPORTANCE_MIN)
-        val manager = (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager?)!!
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(chan)
+
+
+        // On notification click
+        val notificationIntent = Intent(this, MainActivity::class.java)
+        notificationIntent.action = MAIN_ACTION
+        notificationIntent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            101,
+            notificationIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+
         val notificationBuilder: NotificationCompat.Builder = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
         val notification: Notification = notificationBuilder.setOngoing(true)
+            .setContentIntent(pendingIntent)
             .setContentTitle("You are protected.")
             .setContentText("We are there for you") // this is important, otherwise the notification will show the way
             // you want i.e. it will show some default notification
-            //.setSmallIcon(R.drawable.ic_launcher_foreground)
+            //.setSmallIcon(R.drawable.)
             .setPriority(NotificationManager.IMPORTANCE_MIN)
             .setCategory(Notification.CATEGORY_SERVICE)
             .build()
-        startForeground(2, notification)
+        startForeground(101, notification)
     }
 
     override fun onDestroy() {

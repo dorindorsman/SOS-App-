@@ -30,7 +30,7 @@ class MainViewModel @Inject constructor(
     var showAlertDialog by mutableStateOf(false)
         private set
 
-    var currentContact: ContactModel? = null
+    lateinit var currentContact: ContactModel
 
     //var contactList: MutableList<ContactModel>? = mutableListOf()
     var contactList = MutableStateFlow(listOf<ContactModel>())
@@ -48,7 +48,6 @@ class MainViewModel @Inject constructor(
         when (event) {
             is MainEvent.SetShowAlertDialogState -> showAlertDialog = event.state
             is MainEvent.SetCurrentContact -> currentContact = event.contact
-            else -> {}
         }
 
     }
@@ -73,34 +72,4 @@ class MainViewModel @Inject constructor(
             dataStoreRepository.persistPermissionState(state)
         }
     }
-
-
-//    private fun getLocation(context: Context): DoubleArray {
-//        val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-//        val providers = lm.getProviders(true)
-//
-//        var l: Location? = null
-//        for (i in providers.indices.reversed()) {
-//            if (
-//                ActivityCompat.checkSelfPermission(
-//                    context,
-//                    Manifest.permission.ACCESS_FINE_LOCATION
-//                ) == PackageManager.PERMISSION_GRANTED ||
-//                ActivityCompat.checkSelfPermission(
-//                    context,
-//                    Manifest.permission.ACCESS_COARSE_LOCATION
-//                ) == PackageManager.PERMISSION_GRANTED
-//            ) {
-//                l = lm.getLastKnownLocation(providers[i])
-//            }
-//
-//            if (l != null) break
-//        }
-//        val gps = DoubleArray(2)
-//        if (l != null) {
-//            gps[0] = l.latitude
-//            gps[1] = l.longitude
-//        }
-//        return gps
-//    }
 }

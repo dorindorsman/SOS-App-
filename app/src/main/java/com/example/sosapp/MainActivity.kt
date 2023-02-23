@@ -12,7 +12,6 @@ import android.location.LocationManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.PowerManager
 import android.provider.ContactsContract
 import android.provider.Settings
 import android.telephony.SmsManager
@@ -114,9 +113,16 @@ open class MainActivity : ComponentActivity() {
 
     private fun startService() {
         val sensorService = SensorService()
-        val intent = Intent(this.applicationContext, sensorService.javaClass)
-        if (!isMyServiceRunning(sensorService.javaClass)) {
-            startService(intent)
+        val intent = Intent(this, SensorService::class.java)
+        intent.action = SensorService.START_FOREGROUND_SERVICE
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+
+        } else {
+            if (!isMyServiceRunning(sensorService.javaClass)) {
+                startService(intent)
+            }
         }
     }
 
@@ -134,37 +140,8 @@ open class MainActivity : ComponentActivity() {
         }
     }
 
-    fun getLocation(context: Context): Location? {
-        val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        val providers = lm.getProviders(true)
-
-        var location: Location? = null
-        for (i in providers.indices.reversed()) {
-            if (
-                ActivityCompat.checkSelfPermission(
-                    context,
-                    ACCESS_FINE_LOCATION
-                ) == PackageManager.PERMISSION_GRANTED ||
-                ActivityCompat.checkSelfPermission(
-                    context,
-                    ACCESS_COARSE_LOCATION
-                ) == PackageManager.PERMISSION_GRANTED
-            ) {
-                location = lm.getLastKnownLocation(providers[i])
-            }
-            if (location != null) {
-                break
-            }
-        }
-        return location
-    }
-
-
     @Composable
     fun MainScreen(context: Context) {
-
-        Log.d("dorin",getLocation(this).toString())
-
 
         Column(
             modifier = Modifier
@@ -220,8 +197,8 @@ open class MainActivity : ComponentActivity() {
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         items(list) { contact ->
-                            mainViewModel.handleEvent(MainEvent.SetCurrentContact(contact))
                             ItemView(name = contact.name, phone = contact.phone) {
+                                mainViewModel.handleEvent(MainEvent.SetCurrentContact(contact))
                                 mainViewModel.handleEvent(
                                     MainEvent.SetShowAlertDialogState(
                                         true
@@ -249,7 +226,7 @@ open class MainActivity : ComponentActivity() {
                 mainViewModel.handleEvent(MainEvent.SetShowAlertDialogState(false))
             },
                 title = { Text(stringResource(id = R.string.remove_title)) },
-                text = { Text(stringResource(id = R.string.remove_text) + " ${mainViewModel.currentContact?.name}" ) },
+                text = { Text(stringResource(id = R.string.remove_text) + " ${mainViewModel.currentContact.name}" ) },
                 confirmButton = {
                     ExtendedFloatingActionButton(text = {
                         Text(
